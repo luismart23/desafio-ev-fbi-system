@@ -1,78 +1,95 @@
 import bcrypt from 'bcrypt';
-import { generateToken, verifyToken } from '../utils/jwtUtils.js';
-import { getAgentByEmailAndPassword } from '../models/agentsModel.js';
+import jwt from 'jsonwebtoken';
+import { agents } from '../data/agentes.js';
 
-export const signIn = async (req, res) => {
-    const { email, password } = req.body;
+// Función para generar un token JWT
+const generateToken = (payload, expiresIn) => {
+    return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn });
+};
 
+// Función para verificar un token JWT
+const verifyToken = (token) => {
     try {
-        // Autenticar al agente basado en las credenciales
-        const agent = await getAgentByEmailAndPassword(email, password);
-        if (!agent) {
-            return res.status(401).json({ error: 'Credenciales inválidas' });
-        }
-
-        // Verificar la contraseña
-        const passwordMatch = await bcrypt.compare(password, agent.password);
-        if (!passwordMatch) {
-            return res.status(401).json({ error: 'Credenciales inválidas' });
-        }
-
-        // Generar el token JWT con una fecha de expiración de 2 minutos
-        const token = generateToken({ email: agent.email }, '2m');
-        console.log('Token generado:', token);
-
-        // HTML de respuesta
-        const htmlResponse = `
-            <!DOCTYPE html>
-            <html lang="es">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Bienvenido</title>
-            </head>
-            <body>
-                <h1>Bienvenido, ${agent.email}</h1>
-                <p>¡Has iniciado sesión correctamente!</p>
-                <p><a href="/restricted">Acceder a la ruta restringida</a></p>
-                <script>
-                    // Guardar el token en SessionStorage
-                    sessionStorage.setItem('token', '${token}');
-                    // Establecer tiempo de expiración (2 minutos = 120 segundos)
-                    setTimeout(() => {
-                        sessionStorage.removeItem('token');
-                    }, 120000);
-                </script>
-            </body>
-            </html>
-        `;
-
-        // Devolver el HTML de respuesta y el token en formato JSON
-        res.json({ html: htmlResponse, token });
+        return jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
-        console.error('Error al autenticar:', error);
-        res.status(500).send('Error interno del servidor');
+        return null; // Devuelve null si hay un error al verificar el token
     }
 };
 
-export const restricted = (req, res) => {
-    const token = req.headers['authorization'];
-    if (!token) {
-        return res.status(401).send('Acceso denegado');
+export const handleLoginFormSubmit = async (req, res) => {
+    const { email, password } = req.body;
+    const agent = agents.find(a => a.email === email);
+
+    if (!agent || !await bcrypt.compare(password, agent.password)) {
+        return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    // Verificar si el token es válido y no ha expirado
-    const decoded = verifyToken(token);
-    if (!decoded) {
-        return res.status(401).send('Token inválido o expirado');
-    }
+    const token = generateToken({ email: agent.email }, '2m');
+    const expirationTime = new Date().getTime() + 2 * 60 * 1000;
+    req.session.token = token;
+    req.session.tokenExpiration = expirationTime;
 
-    // Mostrar el email del agente autorizado
-    res.send(`Bienvenido, ${decoded.email}`);
+    // Redirigir al usuario a la página de bienvenida después de iniciar sesión
+    res.redirect('/welcome');
 };
 
+export const handleWelcomePage = (req, res) => {
+    const token = req.session.token;
+    const tokenExpiration = req.session.tokenExpiration;
 
+    // Verificar si el token es válido y obtener el email del agente
+    if (token && Date.now() < tokenExpiration) {
+        const decodedToken = verifyToken(token);
+        if (decodedToken && decodedToken.email) {
+            return res.send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Bienvenida</title>
+        </head>
+        <body>
+          <h1>Bienvenido, ${decodedToken.email}</h1>
+          <p><a href="/auth/restricted">Ir a la ruta restringida</a></p>
+        </body>
+        </html>
+      `);
+        }
+    }
 
+    // Si el usuario no está autenticado, redirigir al inicio de sesión
+    res.redirect('/');
+};
 
+export const handleRestrictedLinkClick = (req, res) => {
+    const token = req.session.token;
+    const tokenExpiration = req.session.tokenExpiration;
 
+    // Verificar si el token es válido y obtener el email del agente
+    if (token && Date.now() < tokenExpiration) {
+        const decodedToken = verifyToken(token);
+        if (decodedToken && decodedToken.email) {
+            return res.send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Ruta Restringida</title>
+          <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+        </head>
+        <body>
+          <div class="container">
+            <h1 class="text-center">Bienvenido a la Ruta Restringida, ${decodedToken.email}</h1>
+            <div id="restricted-content" class="text-center"></div>
+          </div>
+        </body>
+        </html>
+      `);
+        }
+    }
 
+    // Si el usuario no está autenticado, redirigir al inicio de sesión
+    res.redirect('/');
+};

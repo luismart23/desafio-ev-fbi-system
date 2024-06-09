@@ -1,32 +1,36 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const link = document.querySelector('a[href="/restricted"]');
+const handleLoginFormSubmit = async (event) => {
+    event.preventDefault();
 
-    if (link) {
-        link.addEventListener('click', function (event) {
-            event.preventDefault();
-            const token = sessionStorage.getItem('token');
-            if (!token) {
-                alert('No estás autorizado para acceder a esta ruta.');
-                return;
-            }
-            fetch('/auth/restricted', {
-                method: 'GET',
-                headers: {
-                    'Authorization': token
-                }
-            })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('No autorizado');
-                    }
-                    return response.text();
-                })
-                .then(data => {
-                    document.body.innerHTML = data;
-                })
-                .catch(error => {
-                    alert(error.message);
-                });
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+
+    try {
+        const response = await fetch('/auth/signin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
         });
+
+        if (!response.ok) {
+            throw new Error('Credenciales inválidas');
+        }
+
+        // Esperar la respuesta como HTML
+        const data = await response.text();
+
+        // Mostrar la respuesta HTML en el contenedor
+        document.getElementById('content-container').innerHTML = data;
+
+        console.log('Inicio de sesión exitoso');
+    } catch (error) {
+        console.error('Error:', error);
+        alert(error.message);
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLoginFormSubmit);
     }
 });

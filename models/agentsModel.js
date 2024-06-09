@@ -1,14 +1,11 @@
 import { agents } from '../data/agentes.js';
 import bcrypt from 'bcrypt';
 
-export const getAgentByEmailAndPassword = (email, password) => {
+export const getAgentByEmailAndPassword = async (email, password) => {
     const agent = agents.find(agent => agent.email === email);
-    if (agent && bcrypt.compareSync(password, agent.password)) {
+    if (agent && await bcrypt.compare(password, agent.password)) {
         return agent;
     }
     return null;
 };
 
-export const getAgentByEmail = (email) => {
-    return agents.find(agent => agent.email === email);
-};
