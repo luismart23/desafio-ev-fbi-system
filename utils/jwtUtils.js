@@ -15,4 +15,3 @@ export const verifyToken = (token) => {
         return null; // Devuelve null si hay un error al verificar el token
     }
 };
-

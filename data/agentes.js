@@ -14,4 +14,3 @@ export const agents = [
     password: bcrypt.hashSync('exactly', 10),
   },
 ];
-

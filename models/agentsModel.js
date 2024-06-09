@@ -8,4 +8,3 @@ export const getAgentByEmailAndPassword = async (email, password) => {
     }
     return null;
 };
-
